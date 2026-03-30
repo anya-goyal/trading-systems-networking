@@ -48,8 +48,8 @@ A simulated trading system demonstrating real-world network architecture pattern
 
 - **UDP** for market data — low latency, no backpressure on the publisher. Packet loss is the subscriber's problem.
 - **Multicast** for normalized feed distribution — one publisher, many subscribers. Adding a new strategy requires zero changes to the handler.
-- **TCP (FIX)** for order entry — guaranteed delivery. A dropped order message is catastrophic.
-- **Gap detection** — the slow strategy tracks sequence numbers and detects missing UDP packets. The fast strategy skips this to minimize processing time.
+- **TCP (FIX)** for order entry — guaranteed delivery. FIX is an application layer protocol implemented on top of TCP.
+- **Gap detection** — the slow strategy tracks sequence numbers and detects missing UDP packets. So does the market data handler. The fast strategy skips this to minimize processing time.
 
 ## Configuration
 
@@ -77,7 +77,7 @@ python strategy_fast.py
 
 ## Dependencies
 
-No third-party packages required — uses Python standard library only.
+Currently uses Python standard library only. If requirements arise, add to `requirements.txt`.
 
 ```bash
 python --version  # Python 3.8+ recommended

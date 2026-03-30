@@ -16,6 +16,7 @@ def main():
     # ── UDP multicast socket: subscribe to group 1 ───────────────────────────
     mcast_sock1 = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     mcast_sock1.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    mcast_sock1.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
     mcast_sock1.bind(("", config.MULTICAST_PORT_1))
     group1 = struct.pack("4sL", socket.inet_aton(config.MULTICAST_GROUP_1), socket.INADDR_ANY)
     mcast_sock1.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, group1)
@@ -24,6 +25,7 @@ def main():
     # ── UDP multicast socket: subscribe to group 2 ───────────────────────────
     mcast_sock2 = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     mcast_sock2.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    mcast_sock2.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
     mcast_sock2.bind(("", config.MULTICAST_PORT_2))
     group2 = struct.pack("4sL", socket.inet_aton(config.MULTICAST_GROUP_2), socket.INADDR_ANY)
     mcast_sock2.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, group2)

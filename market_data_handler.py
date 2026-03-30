@@ -3,7 +3,7 @@ market_data_handler.py
 
 Reads raw market feeds from both exchanges over UDP.
 Normalizes the data into a common internal format.
-Publishes normalized data over two UDP multicast groups partitioned by asset class.
+Publishes normalized data over two UDP multicast groups partitioned by asset class (?).
 """
 
 import socket
