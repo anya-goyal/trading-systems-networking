@@ -12,11 +12,34 @@ EXCHANGE2_UDP_PORT = 5002          # exchange2 publishes market feed here
 EXCHANGE2_FIX_HOST = "127.0.0.1"
 EXCHANGE2_FIX_PORT = 6002          # exchange2 listens for FIX orders here
 
-# ── Multicast groups (market data handler → strategies) ──────────────────────
-MULTICAST_GROUP_1 = "239.0.0.1"    # TODO: define asset class partition
-MULTICAST_GROUP_2 = "239.0.0.2"    # TODO: define asset class partition
-MULTICAST_PORT_1  = 7001
-MULTICAST_PORT_2  = 7002
+MULTICAST_PARTITIONS = [
+    ("239.1.1.1", 7001),  # Equities A–F
+    ("239.1.1.2", 7002),  # Equities G–M
+    ("239.1.1.3", 7003),  # Equities N–Z
+    ("239.1.2.1", 7004),  # Options
+    ("239.1.2.2", 7005),  # Futures
+]
+
+MULTICAST_GROUP_1, MULTICAST_PORT_1 = MULTICAST_PARTITIONS[0]
+MULTICAST_GROUP_2, MULTICAST_PORT_2 = MULTICAST_PARTITIONS[1]
+MULTICAST_GROUP_3, MULTICAST_PORT_3 = MULTICAST_PARTITIONS[2]
+MULTICAST_GROUP_4, MULTICAST_PORT_4 = MULTICAST_PARTITIONS[3]
+MULTICAST_GROUP_5, MULTICAST_PORT_5 = MULTICAST_PARTITIONS[4]
+
+ASSET_EQUITIES = 1
+ASSET_OPTIONS  = 2
+ASSET_FUTURES  = 3
+
+MSG_TYPE_SNAPSHOT = 0x01
+MSG_TYPE_UPDATE   = 0x02
+
+SIDE_NA   = 0
+SIDE_BUY  = 1
+SIDE_SELL = 2
+
+UPDATE_NEW_ORDER = 1
+UPDATE_CANCEL    = 2
+UPDATE_FILL      = 3
 
 # ── Internal Order Gateway ────────────────────────────────────────────────────
 IOG_HOST = "127.0.0.1"
