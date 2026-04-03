@@ -155,7 +155,12 @@ class IOGServer:
             conn.reconnect_at = time.monotonic() + conn.backoff
 
     def _setup_signals(self):
-        """Register signal handlers for graceful shutdown."""
+        """Register signal handlers for graceful shutdown.
+        Skipped when running in a non-main thread (e.g. tests).
+        """
+        import threading
+        if threading.current_thread() is not threading.main_thread():
+            return
         signal.signal(signal.SIGINT, self._signal_handler)
         signal.signal(signal.SIGTERM, self._signal_handler)
 
