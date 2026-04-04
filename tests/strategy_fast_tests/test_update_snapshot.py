@@ -12,6 +12,7 @@ def make_msg(
 ):
     return sf.MDHMessage(
         msg_type=1,
+        order_id=123,
         seq_no=seq_no,
         asset_class=1,
         symbol=symbol,
