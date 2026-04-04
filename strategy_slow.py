@@ -200,7 +200,7 @@ def parse_mdh_packet(data: bytes) -> Optional[MDHMessage]:
 
 
 def update_book(book: OrderBook, msg: MDHMessage) -> None:
-    if msg.update_type == config.UPDATE_NEW:
+    if msg.update_type == config.UPDATE_NEW_ORDER:
         book.add_order(msg.symbol, msg.side, msg.order_id, msg.price, msg.qty)
     elif msg.update_type == config.UPDATE_CANCEL:
         book.remove_order(msg.symbol, msg.side, msg.order_id, msg.price)
