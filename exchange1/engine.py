@@ -74,6 +74,7 @@ class ExchangeEngine:
         self._seq += 1
         ts = int(time.time() * 1000)
         line = f"{self._seq}|{ts}|S|{event_code}"
+        print(f"[Exchange 1] Sent UDP: {line}")
         self._udp.sendto(line.encode("utf-8"), self._udp_target)
 
     def _emit_add(self, o: LiveOrder) -> None:
@@ -84,18 +85,21 @@ class ExchangeEngine:
             f"{o.leaves}|{o.limit_price_int}"
         )
         line = f"{self._seq}|{ts}|A|{rest}"
+        print(f"[Exchange 1] Sent UDP: {line}")
         self._udp.sendto(line.encode("utf-8"), self._udp_target)
 
     def _emit_exec(self, exch_id: int, qty: int) -> None:
         self._seq += 1
         ts = int(time.time() * 1000)
         line = f"{self._seq}|{ts}|E|{exch_id}|{qty}"
+        print(f"[Exchange 1] Sent UDP: {line}")
         self._udp.sendto(line.encode("utf-8"), self._udp_target)
 
     def _emit_cancel_pitch(self, exch_id: int, qty: int) -> None:
         self._seq += 1
         ts = int(time.time() * 1000)
         line = f"{self._seq}|{ts}|X|{exch_id}|{qty}"
+        print(f"[Exchange 1] Sent UDP: {line}")
         self._udp.sendto(line.encode("utf-8"), self._udp_target)
 
     def _send_er(

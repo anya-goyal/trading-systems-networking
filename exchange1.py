@@ -109,6 +109,7 @@ def main() -> None:
 
             def sender(b: bytes) -> None:
                 try:
+                    print(f"[Exchange 1] Sent FIX: {b.decode(errors='replace').strip()}")
                     conn.sendall(b)
                 except OSError as e:
                     print(f"[Exchange 1] send to {st.peer} failed: {e}")
