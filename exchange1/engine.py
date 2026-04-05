@@ -347,7 +347,7 @@ class ExchangeEngine:
         canceled = o.leaves
         o.leaves = 0
         self._emit_cancel_pitch(o.exch_id, canceled)
-        self._send_er(send, o, exec_type="4", ord_status="4", cum_qty=str(o.cum_qty))
+        self._send_er(send, o, exec_type="4", ord_status="4")
         self._finalize_order(o)
 
     def _on_snapshot(self, f: dict[str, str], send: Callable[[bytes], None]) -> None:

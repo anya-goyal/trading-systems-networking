@@ -10,12 +10,26 @@ Internal Order Gateway (IOG).
   - Handles disconnections, reconnections, and graceful shutdown
 """
 
+import errno
 import selectors
 import signal
 import socket
 import struct
 import sys
 import time
+
+# Non-blocking connect_ex: success (0) or "in progress" platform errno values.
+_CONNECT_IN_PROGRESS = {
+    errno.EINPROGRESS,
+    36,  # legacy macOS
+    115,  # Linux EINPROGRESS
+}
+if hasattr(errno, "EWOULDBLOCK"):
+    _CONNECT_IN_PROGRESS.add(errno.EWOULDBLOCK)
+if hasattr(errno, "WSAEWOULDBLOCK"):
+    _CONNECT_IN_PROGRESS.add(errno.WSAEWOULDBLOCK)
+if hasattr(errno, "WSAEINPROGRESS"):
+    _CONNECT_IN_PROGRESS.add(errno.WSAEINPROGRESS)
 
 import config
 from iog.messages import (
@@ -65,19 +79,24 @@ MAX_NOTIONAL = 1_000_000.0
 MAX_POSITION_PER_SYMBOL = 50_000
 MAX_ORDERS_PER_SEC = 100
 
-# ── Exchange config mapping ─────────────────────────────────────────────────
-EXCHANGE_CONFIG = {
-    DEST_EXCH1: {
-        "id": "EXCH1",
-        "host": config.EXCHANGE1_FIX_HOST,
-        "port": config.EXCHANGE1_FIX_PORT,
-    },
-    DEST_EXCH2: {
-        "id": "EXCH2",
-        "host": config.EXCHANGE2_FIX_HOST,
-        "port": config.EXCHANGE2_FIX_PORT,
-    },
-}
+# ── Exchange endpoints (read from config at use time so tests can patch ports) ─
+def _exchange_config(dest: int) -> dict:
+    if dest == DEST_EXCH1:
+        return {
+            "id": "EXCH1",
+            "host": config.EXCHANGE1_FIX_HOST,
+            "port": config.EXCHANGE1_FIX_PORT,
+        }
+    if dest == DEST_EXCH2:
+        return {
+            "id": "EXCH2",
+            "host": config.EXCHANGE2_FIX_HOST,
+            "port": config.EXCHANGE2_FIX_PORT,
+        }
+    return {"id": "UNKNOWN", "host": "", "port": 0}
+
+
+_EXCHANGE_DESTS = (DEST_EXCH1, DEST_EXCH2)
 
 
 class IOGServer:
@@ -124,7 +143,7 @@ class IOGServer:
 
     def _connect_exchange(self, dest: int):
         """Attempt to connect to an exchange. Non-blocking."""
-        cfg = EXCHANGE_CONFIG[dest]
+        cfg = _exchange_config(dest)
         conn = self._exchange_conns.get(dest)
         if conn is None:
             conn = ExchangeConn(exchange_id=cfg["id"])
@@ -135,8 +154,7 @@ class IOGServer:
             sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             sock.setblocking(False)
             err = sock.connect_ex((cfg["host"], cfg["port"]))
-            # connect_ex returns 0 or EINPROGRESS (36 on macOS, 115 on Linux)
-            if err == 0 or err == 36 or err == 115:
+            if err == 0 or err in _CONNECT_IN_PROGRESS:
                 conn.mark_connected(sock)
                 self._sel.register(
                     sock, selectors.EVENT_READ, data=f"exch:{dest}"
@@ -288,7 +306,7 @@ class IOGServer:
         dest = order.destination
         conn = self._exchange_conns.get(dest)
         if conn is None or conn.state != ConnState.CONNECTED:
-            exch_name = EXCHANGE_CONFIG.get(dest, {}).get("id", "UNKNOWN")
+            exch_name = _exchange_config(dest)["id"]
             print(f"[IOG] REJECT {clOrdID}: {exch_name} is DOWN")
             self._order_book.update_state(clOrdID, OrderState.ROUTE_FAIL)
             self._send_reject(strategy_fd, clOrdID, REJECT_EXCH_DOWN)
@@ -453,6 +471,8 @@ class IOGServer:
             msg_type = RESP_FILL
         elif exec_type == "8":
             msg_type = RESP_REJECT
+        elif exec_type == "4":
+            msg_type = RESP_CANCELLED
         else:
             return
 
@@ -473,7 +493,7 @@ class IOGServer:
             pass
 
         # Remove from open orders if terminal
-        if exec_type in ("2", "8"):
+        if exec_type in ("2", "8", "4"):
             session.open_orders.discard(result["clOrdID"])
 
     # ── Graceful shutdown ────────────────────────────────────────────────────
@@ -548,7 +568,7 @@ class IOGServer:
         self._setup_listener()
 
         # Connect to exchanges
-        for dest in EXCHANGE_CONFIG:
+        for dest in _EXCHANGE_DESTS:
             self._connect_exchange(dest)
 
         print("[IOG] Running.")

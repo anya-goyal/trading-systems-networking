@@ -151,6 +151,26 @@ class TestHandlePartialFill(unittest.TestCase):
         self.assertEqual(risk.positions["AAPL"], 100)
 
 
+class TestHandleCancel(unittest.TestCase):
+    def test_exec_type_4_marks_cancelled(self):
+        book, risk, handler = _setup()
+        book.add(_make_order(clOrdID="ORD001"), strategy_fd=10)
+        book.update_state("ORD001", OrderState.SENT)
+
+        result = handler.handle({
+            "clOrdID": "ORD001",
+            "exec_type": "4",
+            "cum_qty": 0,
+            "last_px": 0,
+            "last_qty": 0,
+            "text": "",
+        })
+
+        entry = book.get("ORD001")
+        self.assertEqual(entry.state, OrderState.CANCELLED)
+        self.assertEqual(result["strategy_fd"], 10)
+
+
 class TestHandleReject(unittest.TestCase):
     def test_exchange_reject(self):
         book, risk, handler = _setup()
