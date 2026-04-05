@@ -46,7 +46,7 @@ UPDATE_FILL      = 3
 
 # ── Internal Order Gateway ────────────────────────────────────────────────────
 IOG_HOST = "127.0.0.1"
-IOG_PORT = 8001                    # strategies send binary protocol orders to IOG
+IOG_PORT = 8001                    # strategies send FIX orders here
 
 # ── Strategy Fast (Simple) ───────────────────────────────────────────────────
 SUBSCRIBED_GROUPS = [
