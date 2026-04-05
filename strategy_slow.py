@@ -26,10 +26,10 @@ log = logging.getLogger("slow_strategy")
 
 
 # MDH wire format: [2-byte body length][body]
-# body: B 8s Q B 8s B B d I Q
-MDH_HDR_FMT = "!H"
+# body: B Q Q B 8s B B d I Q
+MDH_HDR_FMT  = "<H"
 MDH_HDR_SIZE = struct.calcsize(MDH_HDR_FMT)
-MDH_BODY_FMT = "!B8sQB8sBBdIQ"
+MDH_BODY_FMT = "<BQQB8sBBQIQ"   # little-endian, Q for order_id, Q for price
 MDH_BODY_SIZE = struct.calcsize(MDH_BODY_FMT)
 
 # Strategy -> IOG order wire format
@@ -172,7 +172,7 @@ def parse_mdh_packet(data: bytes) -> Optional[MDHMessage]:
 
     (
         msg_type,
-        order_id_raw,
+        order_id,
         seq_no,
         asset_class,
         symbol_raw,
@@ -184,7 +184,7 @@ def parse_mdh_packet(data: bytes) -> Optional[MDHMessage]:
     ) = struct.unpack_from(MDH_BODY_FMT, data, MDH_HDR_SIZE)
 
     symbol = symbol_raw.rstrip(b"\x00").decode("utf-8", errors="replace")
-    order_id = struct.unpack("!Q", order_id_raw)[0]
+    # order_id = struct.unpack("!Q", order_id_raw)[0]
 
     return MDHMessage(
         msg_type=msg_type,
@@ -327,7 +327,9 @@ def main() -> None:
 
             update_book(book, msg)
 
+            # TODO: let it run for a bit and didn't see any trades execute - change strat a bit
             if not should_trade(book, msg.symbol):
+                # print("[DEBUG] should NOT trade")
                 continue
 
             now = time.monotonic()
