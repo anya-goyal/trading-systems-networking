@@ -172,6 +172,7 @@ def _publish(mcast_socks: list[socket.socket],
     dest_ip, dest_port = config.MULTICAST_PARTITIONS[partition]
     try:
         mcast_socks[partition].sendto(frame, (dest_ip, dest_port))
+        print(f"[MDH] Sent multicast → {dest_ip}:{dest_port} (partition={partition}, bytes={len(frame)})")
     except OSError as exc:
         log.error("Multicast send failed (partition %d): %s", partition, exc)
 

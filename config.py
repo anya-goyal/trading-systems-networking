@@ -47,3 +47,21 @@ UPDATE_FILL      = 3
 # ── Internal Order Gateway ────────────────────────────────────────────────────
 IOG_HOST = "127.0.0.1"
 IOG_PORT = 8001                    # strategies send binary protocol orders to IOG
+
+# ── Strategy Fast (Simple) ───────────────────────────────────────────────────
+SUBSCRIBED_GROUPS = [
+    (MULTICAST_GROUP_1, MULTICAST_PORT_1),
+    (MULTICAST_GROUP_2, MULTICAST_PORT_2),
+]
+
+SUBSCRIBED_ASSET_CLASSES = [ASSET_EQUITIES]
+SUBSCRIBED_SYMBOLS = []             # empty list = all symbols in subscribed partitions
+
+UDP_BUF_SIZE = 4096
+IOG_BUF_SIZE = 4096
+
+DEFAULT_ORDER_QTY = 10
+MAX_ORDER_RATE = 25                # max outgoing orders per second
+SYMBOL_COOLDOWN_SEC = 0.25         # minimum delay between orders per symbol
+
+MIN_SPREAD_TO_TRADE = 0.05         # place order when (best_ask - best_bid) >= this value
