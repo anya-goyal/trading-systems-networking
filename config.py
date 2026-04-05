@@ -5,6 +5,9 @@ EXCHANGE1_UDP_PORT = 5001          # exchange1 publishes market feed here
 EXCHANGE1_FIX_HOST = "127.0.0.1"
 EXCHANGE1_FIX_PORT = 6001          # exchange1 listens for FIX orders here
 
+EXCHANGE1_SNAPSHOT_HOST = "127.0.0.1"
+EXCHANGE1_SNAPSHOT_PORT = 6101     # dedicated snapshot / MarketDataRequest (35=V) port
+
 # ── Exchange 2 ───────────────────────────────────────────────────────────────
 EXCHANGE2_UDP_HOST = "127.0.0.1"
 EXCHANGE2_UDP_PORT = 5002          # exchange2 publishes market feed here
