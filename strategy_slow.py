@@ -42,6 +42,7 @@ STRATEGY_ID = b"SLOW\x00\x00\x00\x00"
 IOG_NEW_ORDER = 0x01
 ORD_LIMIT = 2
 DEST_EXCHANGE_1 = 1
+DEST_EXCHANGE_2 = 2
 
 
 @dataclass
@@ -208,6 +209,14 @@ def update_book(book: OrderBook, msg: MDHMessage) -> None:
         book.fill_order(msg.symbol, msg.side, msg.order_id, msg.price, msg.qty)
 
 
+def choose_dest_exchange(symbol: str):
+    # very hacky - just a manual list check
+    if symbol in ["TSLA", "GOOG"]:
+        return DEST_EXCHANGE_1
+    if symbol in ["AAPL", "MSFT", "ES"]:
+        return DEST_EXCHANGE_2
+    return 0
+
 def build_new_order(symbol: str, side: int, qty: int, price: float) -> tuple[str, bytes]:
     cl_ord_id = next_cl_ord_id()
     raw = struct.pack(
@@ -220,7 +229,7 @@ def build_new_order(symbol: str, side: int, qty: int, price: float) -> tuple[str
         ORD_LIMIT,
         qty,
         price,
-        DEST_EXCHANGE_1,
+        choose_dest_exchange(symbol),
         STRATEGY_ID,
     )
     return cl_ord_id, raw
