@@ -64,6 +64,8 @@ class MarketSnapshot:
     ask_qty: int = 0
     last_seq: int = 0
     updated_at: float = 0.0
+    avg_price: float = 0.0
+    price_count: int = 0
 
 
 class RateLimiter:
@@ -165,6 +167,11 @@ def update_snapshot(store: dict[str, MarketSnapshot], msg: MDHMessage) -> Market
             snap.ask_qty = 0
         return snap
 
+    # Update running average price
+    if msg.price > 0:
+        snap.price_count += 1
+        snap.avg_price = snap.avg_price + (msg.price - snap.avg_price) / snap.price_count
+
     if msg.side == config.SIDE_BUY:
         snap.best_bid = msg.price
         snap.bid_qty = msg.qty
@@ -215,18 +222,30 @@ def send_bytes(sock: socket.socket, data: bytes) -> bool:
 
 
 def should_trade(snap: MarketSnapshot) -> bool:
+    if snap.avg_price <= 0.0:
+        return False
     if snap.best_bid <= 0.0 or snap.best_ask <= 0.0:
         return False
     if snap.best_bid >= snap.best_ask:
         return False
 
-    spread = snap.best_ask - snap.best_bid
-    return spread >= config.MIN_SPREAD_TO_TRADE
+    # Check if current price (mid-point) is outside 15% band of average
+    mid_price = (snap.best_bid + snap.best_ask) / 2.0
+    lower_band = snap.avg_price * 0.85  # 15% below average
+    upper_band = snap.avg_price * 1.15  # 15% above average
+
+    return mid_price < lower_band or mid_price > upper_band
 
 
 def pick_order(snap: MarketSnapshot) -> tuple[int, float, int]:
-    # Keep it simple: buy at bid when spread is wide enough.
-    return config.SIDE_BUY, snap.best_bid, config.DEFAULT_ORDER_QTY
+    # Trade direction based on whether price is above or below average
+    mid_price = (snap.best_bid + snap.best_ask) / 2.0
+    if mid_price > snap.avg_price:
+        # Price above average: sell
+        return config.SIDE_SELL, snap.best_ask, config.DEFAULT_ORDER_QTY
+    else:
+        # Price below average: buy
+        return config.SIDE_BUY, snap.best_bid, config.DEFAULT_ORDER_QTY
 
 
 def subscribed_sockets() -> list[socket.socket]:
