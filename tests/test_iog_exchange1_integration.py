@@ -2,6 +2,10 @@
 End-to-end integration: strategy client (internal binary) <-> IOG <-> Exchange 1 engine.
 
 Uses real TCP, real FIX framing, and test-scoped ports (see test_threaded_iog_strategy).
+
+PITCH UDP (each datagram the engine sends) is logged to:
+  tests/iog_ex1_integration_udp__<TestClassName>.log
+One file per unittest class (so both integration classes keep separate captures).
 """
 
 from __future__ import annotations
@@ -102,6 +106,20 @@ class IOGExchange1Fixture:
         cls._pitch_rx.bind((TEST_HOST, 0))
         _, pitch_port = cls._pitch_rx.getsockname()
 
+        cls._udp_log_path = os.path.join(
+            os.path.dirname(__file__),
+            f"iog_ex1_integration_udp__{cls.__name__}.log",
+        )
+        with open(cls._udp_log_path, "w", encoding="utf-8") as logf:
+            logf.write(
+                "# Exchange 1 PITCH UDP — each line is one sendto from ExchangeEngine\n"
+            )
+            logf.write("# Format: unix_timestamp\\tdest_host:dest_port\\tpayload\n")
+            logf.write(f"# Test class: {cls.__name__}\n")
+            logf.write(
+                f"# Started: {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime())}\n\n"
+            )
+
         cls._orig = {
             "IOG_PORT": config.IOG_PORT,
             "EXCHANGE1_FIX_PORT": config.EXCHANGE1_FIX_PORT,
@@ -120,6 +138,7 @@ class IOGExchange1Fixture:
             TEST_HOST,
             TEST_EXCH1_PORT,
             allowed_symbols=syms,
+            udp_log_path=cls._udp_log_path,
         )
         cls.ex1.start()
         cls.stub2 = StubExchangeTcpDrain(TEST_HOST, TEST_EXCH2_PORT)

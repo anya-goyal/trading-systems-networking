@@ -11,11 +11,34 @@ from __future__ import annotations
 import selectors
 import socket
 import threading
+import time
 import traceback
 from typing import Any, Callable
 
 from exchange1.engine import ExchangeEngine
 from exchange1.fix import parse_fix_message, try_pop_message
+
+
+class _UdpSendtoLogger:
+    """Wraps a UDP socket: logs each sendto payload as UTF-8 text, then forwards."""
+
+    __slots__ = ("_inner", "_path", "_lock")
+
+    def __init__(self, inner: socket.socket, path: str) -> None:
+        self._inner = inner
+        self._path = path
+        self._lock = threading.Lock()
+
+    def sendto(self, data: bytes, addr) -> int:
+        line = data.decode("utf-8", errors="replace").rstrip("\r\n")
+        with self._lock:
+            with open(self._path, "a", encoding="utf-8") as f:
+                f.write(f"{time.time():.6f}\t{addr[0]}:{addr[1]}\t{line}\n")
+                f.flush()
+        return self._inner.sendto(data, addr)
+
+    def close(self) -> None:
+        self._inner.close()
 
 
 class Exchange1FixHarness:
@@ -27,12 +50,14 @@ class Exchange1FixHarness:
         fix_port: int,
         *,
         allowed_symbols: set[str] | frozenset[str] | None = None,
+        udp_log_path: str | None = None,
     ) -> None:
         self.host = host
         self.fix_port = fix_port
         self.allowed_symbols = (
             set(allowed_symbols) if allowed_symbols is not None else None
         )
+        self._udp_log_path = udp_log_path
         self._stop = threading.Event()
         self._ready = threading.Event()
         self._thread: threading.Thread | None = None
@@ -50,7 +75,11 @@ class Exchange1FixHarness:
             self._thread = None
 
     def _run(self) -> None:
-        udp_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        udp_sock: socket.socket | _UdpSendtoLogger = socket.socket(
+            socket.AF_INET, socket.SOCK_DGRAM
+        )
+        if self._udp_log_path:
+            udp_sock = _UdpSendtoLogger(udp_sock, self._udp_log_path)
         syms = self.allowed_symbols
         engine = ExchangeEngine(
             udp_sock, allowed_symbols=syms if syms is not None else None
