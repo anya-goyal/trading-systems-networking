@@ -1,4 +1,5 @@
 tests/__pycache__
+tests/iog_ex1_integration_udp__*.log
 
 __pycache__
 

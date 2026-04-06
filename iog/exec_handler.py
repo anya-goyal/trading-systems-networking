@@ -53,6 +53,10 @@ class ExecReportHandler:
             # Reject from exchange
             self._book.update_state(clOrdID, OrderState.REJECTED)
 
+        elif exec_type == "4":
+            # Canceled (user cancel or IOC remainder)
+            self._book.update_state(clOrdID, OrderState.CANCELLED)
+
         return {
             "strategy_fd": entry.strategy_fd,
             "clOrdID": clOrdID,
