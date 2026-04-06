@@ -14,8 +14,6 @@ import time
 import unittest
 from unittest.mock import patch, MagicMock
 
-# mock config before importing strategy_slow
-import sys
 config_mock = MagicMock()
 config_mock.SIDE_BUY = 1
 config_mock.SIDE_SELL = 2
@@ -32,9 +30,18 @@ config_mock.UDP_BUF_SIZE = 65536
 config_mock.SUBSCRIBED_GROUPS = []
 config_mock.SUBSCRIBED_ASSET_CLASSES = {1}
 config_mock.SUBSCRIBED_SYMBOLS = set()
-sys.modules["config"] = config_mock
 
 import strategy_slow
+
+# Patch only strategy_slow's config reference — never sys.modules["config"],
+# or integration/threaded tests see MagicMock and IOG cannot open sockets.
+_strategy_slow_real_config = strategy_slow.config
+strategy_slow.config = config_mock
+
+
+def tearDownModule():
+    strategy_slow.config = _strategy_slow_real_config
+
 from strategy_slow import (
     OrderBook,
     RateLimiter,
@@ -68,7 +75,7 @@ def make_mdh_packet(
     body = struct.pack(
         MDH_BODY_FMT,
         msg_type,
-        struct.pack("!Q", order_id),
+        order_id,
         seq_no,
         asset_class,
         symbol.encode().ljust(8, b"\x00")[:8],

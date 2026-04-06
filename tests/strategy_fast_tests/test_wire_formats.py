@@ -41,7 +41,7 @@ def build_mdh_packet_full(
 
 def test_mdh_length_prefix_correct():
     packet = build_mdh_packet_full()
-    body_len = struct.unpack_from("!H", packet, 0)[0]
+    body_len = struct.unpack_from(sf.MDH_HDR_FMT, packet, 0)[0]
 
     assert body_len == sf.MDH_BODY_SIZE
 

@@ -29,7 +29,7 @@ log = logging.getLogger("slow_strategy")
 # body: B Q Q B 8s B B d I Q
 MDH_HDR_FMT  = "<H"
 MDH_HDR_SIZE = struct.calcsize(MDH_HDR_FMT)
-MDH_BODY_FMT = "<BQQB8sBBQIQ"   # little-endian, Q for order_id, Q for price
+MDH_BODY_FMT = "<BQQB8sBBdIQ"   # little-endian; price = float64 USD
 MDH_BODY_SIZE = struct.calcsize(MDH_BODY_FMT)
 
 # Strategy -> IOG order wire format

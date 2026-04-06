@@ -20,11 +20,10 @@ def build_mdh_packet_full(
     timestamp=1710000000,
 ):
     symbol_bytes = symbol.encode().ljust(8, b"\x00")
-    order_id_bytes = struct.pack("!Q", order_id)
     body = struct.pack(
         ss.MDH_BODY_FMT,
         msg_type,
-        order_id_bytes,
+        order_id,
         seq_no,
         asset_class,
         symbol_bytes,
@@ -41,7 +40,7 @@ def build_mdh_packet_full(
 
 def test_mdh_length_prefix_correct():
     packet = build_mdh_packet_full()
-    body_len = struct.unpack_from("!H", packet, 0)[0]
+    body_len = struct.unpack_from(ss.MDH_HDR_FMT, packet, 0)[0]
 
     assert body_len == ss.MDH_BODY_SIZE
 
