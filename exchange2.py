@@ -4,6 +4,7 @@ exchange2.py
 Simulated exchange 2.
   - Publishes a market data feed over UDP
   - Listens for incoming FIX orders over TCP
+  - Sends FIX execution reports back to IOG
 """
 
 import random
@@ -21,6 +22,10 @@ SYMBOLS = [
     ("MSFT", config.ASSET_EQUITIES),
     ("ES", config.ASSET_FUTURES),
 ]
+
+# Very basic in-memory order store
+# clOrdID -> order info
+OPEN_ORDERS = {}
 
 
 def build_market_update(seq_num):
@@ -63,14 +68,36 @@ def build_fix_message(tags):
     return f"{head}{body}10={checksum:03d}{SOH}"
 
 
-def build_exec_report(cl_ord_id, exec_type, ord_status, text=""):
+def build_exec_report(
+    cl_ord_id,
+    exec_type,
+    ord_status,
+    cum_qty=0,
+    last_px=0.0,
+    last_qty=0,
+    text="",
+):
+    """
+    Build FIX ExecutionReport (35=8)
+
+    Important fields for Ari's IOG:
+      11  ClOrdID
+      150 ExecType
+      14  CumQty
+      31  LastPx
+      32  LastQty
+      58  Text (optional)
+    """
     tags = [
-        ("35", "8"),           # ExecutionReport
-        ("49", "EXCHANGE2"),
-        ("56", "CLIENT"),
-        ("11", cl_ord_id),
-        ("150", exec_type),    # ExecType
-        ("39", ord_status),    # OrdStatus
+        ("35", "8"),                 # ExecutionReport
+        ("49", "EXCHANGE2"),         # SenderCompID
+        ("56", "IOG"),               # TargetCompID
+        ("11", cl_ord_id),           # ClOrdID
+        ("150", exec_type),          # ExecType
+        ("39", ord_status),          # OrdStatus
+        ("14", str(cum_qty)),        # CumQty
+        ("31", f"{last_px:.2f}"),    # LastPx
+        ("32", str(last_qty)),       # LastQty
     ]
 
     if text:
@@ -83,19 +110,146 @@ def handle_fix_message(raw_msg):
     fields = parse_fix(raw_msg)
 
     msg_type = fields.get("35")
-    cl_ord_id = fields.get("11", "UNKNOWN")
 
+    # --------------------------------------------------
+    # New Order Single (35=D)
+    # --------------------------------------------------
     if msg_type == "D":
-        print(f"[Exchange 2] NEW ORDER received: {fields}")
-        return build_exec_report(cl_ord_id, "0", "0", "order accepted")
+        cl_ord_id = fields.get("11", "UNKNOWN")
+        symbol = fields.get("55")
+        side = fields.get("54")
+        qty_text = fields.get("38")
+        ord_type = fields.get("40", "2")   # default to limit
+        price_text = fields.get("44", "0")
 
+        print(f"[Exchange 2] NEW ORDER received: {fields}")
+
+        # Basic validation
+        if cl_ord_id in OPEN_ORDERS:
+            return build_exec_report(
+                cl_ord_id,
+                exec_type="8",
+                ord_status="8",
+                text="reject: duplicate ClOrdID",
+            )
+
+        if symbol is None:
+            return build_exec_report(
+                cl_ord_id,
+                exec_type="8",
+                ord_status="8",
+                text="reject: missing symbol",
+            )
+
+        if side not in {"1", "2"}:
+            return build_exec_report(
+                cl_ord_id,
+                exec_type="8",
+                ord_status="8",
+                text="reject: bad side",
+            )
+
+        try:
+            qty = int(qty_text)
+        except (TypeError, ValueError):
+            return build_exec_report(
+                cl_ord_id,
+                exec_type="8",
+                ord_status="8",
+                text="reject: bad quantity",
+            )
+
+        if qty <= 0:
+            return build_exec_report(
+                cl_ord_id,
+                exec_type="8",
+                ord_status="8",
+                text="reject: quantity must be > 0",
+            )
+
+        price = 0.0
+        if ord_type == "2":   # limit order
+            try:
+                price = float(price_text)
+            except (TypeError, ValueError):
+                return build_exec_report(
+                    cl_ord_id,
+                    exec_type="8",
+                    ord_status="8",
+                    text="reject: bad price",
+                )
+
+            if price <= 0:
+                return build_exec_report(
+                    cl_ord_id,
+                    exec_type="8",
+                    ord_status="8",
+                    text="reject: price must be > 0",
+                )
+
+        # Store order in simple order book / state store
+        OPEN_ORDERS[cl_ord_id] = {
+            "symbol": symbol,
+            "side": side,
+            "qty": qty,
+            "price": price,
+            "cum_qty": 0,
+            "status": "OPEN",
+        }
+
+        # Send ACK back to IOG
+        return build_exec_report(
+            cl_ord_id,
+            exec_type="0",   # ack
+            ord_status="0",  # new
+            cum_qty=0,
+            last_px=0.0,
+            last_qty=0,
+            text="order accepted",
+        )
+
+    # --------------------------------------------------
+    # Cancel Request (35=F)
+    # --------------------------------------------------
     elif msg_type == "F":
         print(f"[Exchange 2] CANCEL received: {fields}")
-        return build_exec_report(cl_ord_id, "4", "4", "order cancelled")
 
+        # Some cancel serializers use 41=OrigClOrdID.
+        # Fall back to 11 if 41 is not present.
+        orig_cl_ord_id = fields.get("41") or fields.get("11", "UNKNOWN")
+
+        order = OPEN_ORDERS.pop(orig_cl_ord_id, None)
+        if order is None:
+            return build_exec_report(
+                orig_cl_ord_id,
+                exec_type="8",
+                ord_status="8",
+                text="reject: unknown order to cancel",
+            )
+
+        return build_exec_report(
+            orig_cl_ord_id,
+            exec_type="4",   # cancelled
+            ord_status="4",
+            cum_qty=order["cum_qty"],
+            last_px=0.0,
+            last_qty=0,
+            text="order cancelled",
+        )
+
+    # --------------------------------------------------
+    # Unknown / unsupported message type
+    # --------------------------------------------------
     else:
+        cl_ord_id = fields.get("11", "UNKNOWN")
         print(f"[Exchange 2] UNKNOWN FIX message: {fields}")
-        return build_exec_report(cl_ord_id, "8", "8", "unsupported message type")
+
+        return build_exec_report(
+            cl_ord_id,
+            exec_type="8",
+            ord_status="8",
+            text="reject: unsupported message type",
+        )
 
 
 def main():
@@ -137,7 +291,10 @@ def main():
 
                     raw_msg = data.decode(errors="ignore")
                     reply = handle_fix_message(raw_msg)
+
+                    # Send execution report back to IOG on same TCP connection
                     sock.sendall(reply.encode())
+                    print(f"[Exchange 2] Sent ExecReport: {reply.replace(SOH, '|')}")
 
             # Send one fake UDP update every second
             if time.time() - last_send >= 1.0:
