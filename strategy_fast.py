@@ -25,10 +25,10 @@ log = logging.getLogger("fast_strategy")
 
 
 # MDH wire format: [2-byte body length][body]
-# body: B 8s Q B 8s B B d I Q
+# body: B Q Q B 8s B B d I Q
 MDH_HDR_FMT = "!H"
 MDH_HDR_SIZE = struct.calcsize(MDH_HDR_FMT)
-MDH_BODY_FMT = "!B8sQB8sBBdIQ"
+MDH_BODY_FMT = "!BQQB8sBBdIQ"
 MDH_BODY_SIZE = struct.calcsize(MDH_BODY_FMT)
 
 # Strategy -> IOG order wire format: !HB16s8sBBIdB8s
@@ -46,6 +46,7 @@ DEST_EXCHANGE_1 = 1
 @dataclass
 class MDHMessage:
     msg_type: int
+    order_id: int
     seq_no: int
     asset_class: int
     symbol: str
@@ -125,7 +126,7 @@ def parse_mdh_packet(data: bytes) -> Optional[MDHMessage]:
 
     (
         msg_type,
-        _order_id,
+        order_id,
         seq_no,
         asset_class,
         symbol_raw,
@@ -139,6 +140,7 @@ def parse_mdh_packet(data: bytes) -> Optional[MDHMessage]:
     symbol = symbol_raw.rstrip(b"\x00").decode("utf-8", errors="replace")
     return MDHMessage(
         msg_type=msg_type,
+        order_id=order_id,
         seq_no=seq_no,
         asset_class=asset_class,
         symbol=symbol,
