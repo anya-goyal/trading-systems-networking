@@ -59,7 +59,8 @@ class ExchangeEngine:
         allowed_symbols: set[str] | None = None,
     ) -> None:
         self._udp = udp_sock
-        self._symbols = allowed_symbols or {"AAPL", "MSFT", "TSLA", "GOOG"}
+        # self._symbols = allowed_symbols or {"AAPL", "MSFT", "TSLA", "GOOG"} # TODO: NEED TO CHANGE THIS
+        self._symbols = {"TSLA", "GOOG"}
         self._seq = 0
         self._next_exch_id = 1000
         self._books: dict[str, Book] = {}

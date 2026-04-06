@@ -107,7 +107,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     p.add_argument("--host", default=config.EXCHANGE1_FIX_HOST, help="FIX server host")
     p.add_argument("--port", type=int, default=config.EXCHANGE1_FIX_PORT, help="FIX server port")
-    p.add_argument("--symbol", default="AAPL")
+    p.add_argument("--symbol", default="TSLA")
     p.add_argument(
         "--theo",
         type=float,
