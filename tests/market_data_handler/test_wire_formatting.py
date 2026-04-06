@@ -21,6 +21,7 @@ config = types.ModuleType("config")
 config.ASSET_EQUITIES    = 1
 config.ASSET_OPTIONS     = 2
 config.ASSET_FUTURES     = 3
+config.SIDE_NA           = 0
 config.SIDE_BUY          = 1
 config.SIDE_SELL         = 2
 config.UPDATE_NEW_ORDER  = 1
@@ -42,15 +43,20 @@ config.MULTICAST_PARTITIONS = [
     ("239.1.2.2", 7005),  # 4 – Futures
 ]
 
-import sys
-sys.modules["config"] = config
+import market_data_handler as mdh  # noqa: E402 (import after stub is defined)
 
-import market_data_handler as mdh  # noqa: E402 (after stub)
+# Do not replace sys.modules["config"] — that breaks other tests (IOG, strategies).
+_mdh_real_config = mdh.config
+mdh.config = config
+
+
+def tearDownModule():
+    mdh.config = _mdh_real_config
 
 # ---------------------------------------------------------------------------
 # Shared constants & helpers
 # ---------------------------------------------------------------------------
-BODY_FMT  = "<BQQB8sBBQIQ"
+BODY_FMT  = "<BQQB8sBBdIQ"
 HDR_FMT   = "<H"
 BODY_SIZE = 48
 
@@ -314,13 +320,13 @@ class TestWireFrameEncoding(unittest.TestCase):
     # --- Price (8 B) ---
 
     def test_price_preserved(self):
-        self.assertEqual(self._decode(price_cents=29999)["price"], 29999)
+        self.assertAlmostEqual(self._decode(price_cents=29999)["price"], 299.99)
 
     def test_price_zero(self):
-        self.assertEqual(self._decode(price_cents=0)["price"], 0)
+        self.assertEqual(self._decode(price_cents=0)["price"], 0.0)
 
     def test_price_large(self):
-        self.assertEqual(self._decode(price_cents=10_000_000)["price"], 10_000_000)
+        self.assertEqual(self._decode(price_cents=10_000_000)["price"], 100_000.0)
 
     # --- Quantity (4 B) ---
 
@@ -350,13 +356,83 @@ class TestWireFrameEncoding(unittest.TestCase):
         seq_bytes = frame[11:19]
         self.assertEqual(struct.unpack("<Q", seq_bytes)[0], 1)
 
-    def test_little_endian_price_not_big_endian(self):
-        price = 0x0102030405060708
-        raw = _make_raw(price_cents=price)
+    def test_little_endian_price_is_ieee_double(self):
+        price_usd = 123.45
+        raw = _make_raw(price_cents=12345)
         frame, _, _ = mdh._normalize(raw, _fresh_tracker())
         decoded = _decode_frame(frame)
-        # If accidentally big-endian the value would be byte-reversed
-        self.assertEqual(decoded["price"], price)
+        self.assertAlmostEqual(decoded["price"], price_usd, places=10)
+        # offset: HDR(2) + msg_type(1) + order_id(8) + seq(8) + asset(1) + symbol(8) + side(1) + upd(1) = 30
+        price_bytes = frame[30:38]
+        self.assertAlmostEqual(struct.unpack("<d", price_bytes)[0], price_usd, places=10)
+
+
+# ===========================================================================
+# 2b. Exchange 1 PITCH → normalized frames
+# ===========================================================================
+
+class TestExchange1PitchNormalization(unittest.TestCase):
+    """Sample lines from docs/exchange1.md map to the same wire layout as Exchange 2."""
+
+    def setUp(self):
+        mdh._pitch_open.clear()
+        mdh._order_id_counter = 0
+
+    def test_system_message_skipped(self):
+        raw = b"1|1711805400000|S|O"
+        self.assertIsNone(mdh._normalize(raw, _fresh_tracker()))
+
+    def test_add_order_maps_price_and_fields(self):
+        raw = b"2|1711805400050|A|101|AAPL|EQ|B|100|1502500"
+        result = mdh._normalize(raw, _fresh_tracker())
+        self.assertIsNotNone(result)
+        frame, asset_class, sym = result
+        self.assertEqual(asset_class, config.ASSET_EQUITIES)
+        self.assertTrue(sym.startswith(b"AAPL"))
+        d = _decode_frame(frame)
+        self.assertEqual(d["order_id"], 101)
+        self.assertEqual(d["seq_num"], 2)
+        self.assertEqual(d["side"], config.SIDE_BUY)
+        self.assertEqual(d["update_type"], config.UPDATE_NEW_ORDER)
+        self.assertAlmostEqual(d["price"], 150.25)
+        self.assertEqual(d["quantity"], 100)
+        self.assertEqual(d["timestamp"], 1711805400)
+
+    def test_options_asset_class_partition(self):
+        raw = b"1|1700000000000|A|55|SPY|OPT|S|10|500000"
+        result = mdh._normalize(raw, _fresh_tracker())
+        self.assertIsNotNone(result)
+        frame, asset_class, _ = result
+        self.assertEqual(asset_class, config.ASSET_OPTIONS)
+        self.assertEqual(mdh._partition_for(asset_class, b"SPY\x00\x00\x00\x00"), 3)
+
+    def test_exec_after_add_uses_open_order_state(self):
+        tr = _fresh_tracker()
+        mdh._normalize(b"2|1711805400050|A|101|AAPL|EQ|B|100|1502500", tr)
+        r2 = mdh._normalize(b"3|1711805400100|E|101|50", tr)
+        self.assertIsNotNone(r2)
+        d = _decode_frame(r2[0])
+        self.assertEqual(d["update_type"], config.UPDATE_FILL)
+        self.assertEqual(d["quantity"], 50)
+        self.assertAlmostEqual(d["price"], 150.25)
+        self.assertEqual(d["order_id"], 101)
+
+    def test_cancel_after_add_clears_state_when_fully_canceled(self):
+        tr = _fresh_tracker()
+        mdh._normalize(b"2|1711805400050|A|101|AAPL|EQ|B|100|1502500", tr)
+        r2 = mdh._normalize(b"4|1711805400150|X|101|100", tr)
+        self.assertIsNotNone(r2)
+        d = _decode_frame(r2[0])
+        self.assertEqual(d["update_type"], config.UPDATE_CANCEL)
+        self.assertEqual(len(mdh._pitch_open), 0)
+
+    def test_exec_without_prior_add_dropped(self):
+        self.assertIsNone(
+            mdh._normalize(b"3|1711805400100|E|999|50", _fresh_tracker()))
+
+    def test_malformed_add_wrong_count(self):
+        self.assertIsNone(
+            mdh._normalize(b"2|1711805400050|A|101|AAPL|EQ|B|100", _fresh_tracker()))
 
 
 # ===========================================================================

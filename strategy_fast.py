@@ -25,10 +25,10 @@ log = logging.getLogger("fast_strategy")
 
 
 # MDH wire format: [2-byte body length][body]
-# body: B Q Q B 8s B B d I Q
+# body: B Q Q B 8s B B d I Q (price = float64 USD)
 MDH_HDR_FMT  = "<H"           # little-endian to match MDH
 MDH_HDR_SIZE = struct.calcsize(MDH_HDR_FMT)
-MDH_BODY_FMT = "<BQQB8sBBQIQ" # little-endian + Q not d for price
+MDH_BODY_FMT = "<BQQB8sBBdIQ"
 MDH_BODY_SIZE = struct.calcsize(MDH_BODY_FMT)
 
 # Strategy -> IOG order wire format: !HB16s8sBBIdB8s

@@ -48,7 +48,7 @@ def build_mdh_packet(
     body = struct.pack(
         MDH_BODY_FMT,
         msg_type,
-        b"ORD00001",                                     # order_id (8 bytes)
+        1,                                               # synthetic order id
         seq_no,
         asset_class,
         symbol.encode().ljust(8, b"\x00")[:8],
@@ -56,7 +56,7 @@ def build_mdh_packet(
         update_type,
         price,
         qty,
-        int(time.time() * 1_000_000_000),                # timestamp nanos
+        int(time.time()),
     )
     header = struct.pack(MDH_HDR_FMT, len(body))
     return header + body

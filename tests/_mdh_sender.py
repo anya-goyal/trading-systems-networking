@@ -8,8 +8,8 @@ import struct
 import time
 import config
 
-MDH_BODY_FMT = "!B8sQB8sBBdIQ"
-HDR_FMT = "!H"
+MDH_BODY_FMT = "<BQQB8sBBdIQ"
+HDR_FMT = "<H"
 GROUP = config.MULTICAST_GROUP_1
 PORT = config.MULTICAST_PORT_1
 
@@ -18,7 +18,7 @@ def send(symbol, side, price, qty, seq):
     body = struct.pack(
         MDH_BODY_FMT,
         config.MSG_TYPE_UPDATE,
-        b"ORD00001",
+        1,
         seq,
         config.ASSET_EQUITIES,
         symbol.encode().ljust(8, b"\x00")[:8],
@@ -26,7 +26,7 @@ def send(symbol, side, price, qty, seq):
         config.UPDATE_NEW_ORDER,
         price,
         qty,
-        int(time.time() * 1_000_000_000),
+        int(time.time()),
     )
     frame = struct.pack(HDR_FMT, len(body)) + body
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
